@@ -6,6 +6,7 @@ const path = require('path');
 const admin = require('firebase-admin');
 const logger = require('./logger');
 const { setInterval } = require('timers');
+require('dotenv').config();
 
 // Load SSL certificate and private key
 const server = https.createServer({
@@ -14,19 +15,19 @@ const server = https.createServer({
 });
 
 // Initialize Firebase Admin SDK
-const serviceAccount = require(path.join(__dirname, '/utchat-1548b-firebase-adminsdk-8noxd-4979958265.json'));
+// const serviceAccount = require(path.join(__dirname, '/utchat-1548b-firebase-adminsdk-8noxd-4979958265.json'));
 
-admin.initializeApp({
-    credential: admin.credential.cert(serviceAccount),
-});
+// admin.initializeApp({
+//     credential: admin.credential.cert(serviceAccount),
+// });
 
-const messaging = admin.messaging();
+// const messaging = admin.messaging();
 
 const pool = mysql.createPool({
-    host: 'localhost',
-    user: 'root',     // Change this to your MySQL username
-    password: '',     // Change this to your MySQL password
-    database: 'websocket_chat',
+    host: process.env.DB_HOST,
+    user: process.env.DB_USERNAME,     // Change this to your MySQL username
+    password: process.env.DB_PASSWORD,     // Change this to your MySQL password
+    database: process.env.DB_DATABASE,
     waitForConnections: true,
     connectionLimit: 10,
     queueLimit: 0,
