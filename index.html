@@ -1,0 +1,363 @@
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Live Chat</title>
+        <link rel="stylesheet"
+            href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.7.2/css/all.min.css">
+        <style>
+            body {
+                font-family: Arial, sans-serif;
+                margin: 0;
+                padding: 0;
+                background-color: #f0f2f5;
+            }
+
+            #chat {
+                max-width: 600px;
+                margin: 20px auto;
+                padding: 20px;
+                border: 1px solid #ccc;
+                border-radius: 8px;
+                background-color: #fff;
+                box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
+            }
+
+            #messages {
+                list-style: none;
+                padding: 0;
+                margin: 0;
+                height: 79vh;
+                overflow-y: auto;
+                border: 1px solid #ddd;
+                padding: 10px;
+                margin-bottom: 10px;
+                background-color: #e9ecef;
+                border-radius: 8px;
+                display: flex;
+                flex-direction: column;
+            }
+
+
+            #messages li {
+                margin-bottom: 10px;
+                max-width: 75%;
+                word-wrap: break-word;
+                position: relative;
+            }
+
+            #messages li.me {
+                text-align: right;
+                background-color: #0084ff;
+                color: #fff;
+                border-radius: 18px 18px 0 18px;
+                padding: 10px 15px;
+                display: inline-block;
+                margin-left: auto;
+                box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+            }
+
+            #messages li.other {
+                text-align: left;
+                background-color: #f1f0f0;
+                color: #000;
+                border-radius: 18px 18px 18px 0;
+                padding: 10px 15px;
+                display: inline-block;
+                margin-right: auto;
+                box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+            }
+
+            #messageInput {
+                width: 85%;
+                padding: 10px 40px;
+                border: 1px solid #ccc;
+                border-radius: 20px;
+                outline: none;
+            }
+
+            #sendButton {
+                padding: 7px 20px;
+                background-color: #0084ff;
+                color: white;
+                border: none;
+                border-radius: 20px;
+                cursor: pointer;
+                position: absolute;
+                top: 4px;
+                right: 15px;
+            }
+
+            #sendButton:hover {
+                background-color: #006ecf;
+            }
+
+            .seen::after {
+                content: ' ✓✓';
+                color: green;
+                font-size: 0.9em;
+            }
+
+            .bottom-footer {
+                position: relative;
+                width: 100%;
+            }
+
+            button#fileUploadButton {
+                position: absolute;
+                left: 7px;
+                top: 3px;
+                height: 30px;
+                width: 30px;
+                border-radius: 50%;
+                border: none;
+                color: #fff;
+                background: #0084ff;
+            }
+
+            @media(max-width:767.97px){
+                #messageInput {
+                    width: 80%;
+                }
+            }
+        </style>
+    </head>
+    <body>
+        <div id="chat">
+            <ul id="messages"></ul>
+            <div class="bottom-footer">
+                <div id="typingIndicator"
+                    style="font-style: italic; color: gray;"></div>
+                <input id="messageInput" type="text"
+                    placeholder="Type a message..." />
+                <button id="fileUploadButton"><i
+                        class="fa-solid fa-paperclip"></i></button>
+                <button id="sendButton"><i
+                        class="fa-solid fa-paper-plane"></i></button>
+            </div>
+        </div>
+
+        <script>
+        const ws = new WebSocket('ws://localhost:8080');
+        const messagesList = document.getElementById('messages');
+        const messageInput = document.getElementById('messageInput');
+        const sendButton = document.getElementById('sendButton');
+        const username = prompt("Enter your name:", "User");
+
+        // let login_user = localStorage.getItem('login_user');
+        // let receiver_user = localStorage.getItem('receiver_user');
+        // let room_id = localStorage.getItem('room_id');
+
+        const queryString = window.location.search;
+        const urlParams = new URLSearchParams(queryString);
+        let room_id = urlParams.get('room_id')
+        let login_user = urlParams.get('login_user')
+
+        let receiver_user = urlParams.get('receiver_user')
+        let logged_username = urlParams.get('logged_username')
+        let chat_username = 'Golu';
+
+        // Add message to chat window
+        const addMessage = (message, log_user_id) => {
+            const li = document.createElement('li');
+            li.textContent = message;
+            li.classList = log_user_id == login_user ? 'me' : 'other'
+            messagesList.appendChild(li);
+            messagesList.scrollTop = messagesList.scrollHeight; // Auto-scroll
+        };
+
+        // On connection open
+        // ws.onopen = () => {
+        //     console.log('Connected to the server');
+        //     addMessage('Connected to the chat server.');
+        // };
+
+        let typingTimeout;
+
+        // Notify server when typing starts
+        messageInput.addEventListener('input', () => {
+            clearTimeout(typingTimeout);
+
+            ws.send(
+                JSON.stringify({
+                    room_id:room_id,
+                    type: 'typing',
+                    sender: login_user,
+                    receiver_user: receiver_user,
+                    isTyping: true,
+                })
+            );
+
+            // Stop typing after a delay
+            typingTimeout = setTimeout(() => {
+                ws.send(
+                    JSON.stringify({
+                        room_id:room_id,
+                        type: 'typing',
+                        sender: login_user,
+                        receiver_user: receiver_user,
+                        isTyping: false,
+                    })
+                );
+            }, 2000);
+        });
+
+        const fileInput = document.createElement('input');
+        fileInput.type = 'file';
+        fileInput.addEventListener('change', () => {
+            const file = fileInput.files[0];
+            const reader = new FileReader();
+
+            reader.onload = () => {
+                ws.send(
+                    JSON.stringify({
+                        room_id:room_id,
+                        type: 'file',
+                        roomId: room_id,
+                        sender: login_user,
+                        receiver_user: receiver_user,
+                        fileName: file.name,
+                        fileData: reader.result.split(',')[1], // Base64 data
+                    })
+                );
+            };
+
+            reader.readAsDataURL(file);
+        });
+
+        document.getElementById('fileUploadButton').addEventListener('click', () => {
+            fileInput.click();
+        });
+
+
+        // On WebSocket connection open
+        ws.onopen = () => {
+            console.log('Connected to the server');
+            addMessage('Connected to the chat server.');
+
+            // Fetch chat history for the logged-in user and selected receiver
+            // const login_user = localStorage.getItem('login_user');
+            // const receiver_user = localStorage.getItem('receiver_user');
+
+            if (login_user && receiver_user) {
+                ws.send(
+                    JSON.stringify({
+                        room_id:room_id,
+                        type: 'fetch_history',
+                        sender: login_user,
+                        receiver_user: receiver_user,
+                    })
+                );
+            }
+        };
+
+        // On receiving a message
+        ws.onmessage = (event) => {
+            const received = JSON.parse(event.data);
+
+            if (received.type === 'chat') {
+                // Send read acknowledgment
+                ws.send(
+                    JSON.stringify({
+                        room_id:room_id,
+                        type: 'ack_seen',
+                        messageId: received.messageId,
+                        sender: login_user,
+                        receiver_user: received.sender,
+                    })
+                );
+
+                if((login_user == received.logged_user && receiver_user == received.chat_user) || (login_user == received.chat_user && receiver_user == received.logged_user)) {
+                    room_id = received.room_id
+                }
+
+                if(room_id == received.room_id) {
+                    addMessage(`${received.messages[0].sender_name}: ${received.messages[0].message}`, `${received.logged_user}`);
+                }
+
+            } else if (received.type === 'history') {
+                // Display the chat history
+                const messages = received.messages;
+
+                if (messages.length > 0) {
+
+                    room_id = received.room_id
+                    console.log('received ------------------ ', received, room_id)
+
+
+                    messages.forEach(msg => {
+                        const sender = msg.created_by == localStorage.getItem('login_user') ? 'You' : chat_username;
+                        addMessage(`${msg.sender_name}: ${msg.message}`, msg.created_by);
+                    });
+                } else {
+                    addMessage('No chat history available.');
+                }
+                // historyButton.disabled = false; // Re-enable the button after history is loaded
+            } else if (received.type === 'info') {
+                // addMessage(`* ${received.message}`);
+            } else if (received.type === 'typing' && received.receiver_user === login_user) {
+
+                if(room_id == received.room_id) {
+                    const typingIndicator = document.getElementById('typingIndicator');
+                    if (received.isTyping) {
+                        typingIndicator.textContent = `${received.sender} is typing...`;
+                    } else {
+                        typingIndicator.textContent = '';
+                    }
+                }
+            } else if (received.type === 'read_receipt') {
+                if(room_id == received.room_id) {
+                    const messageElement = document.querySelector(`[data-id="${received.messageId}"]`);
+                    if (messageElement) {
+                        messageElement.classList.add('seen'); // Add a visual indicator for "seen"
+                    }
+                }
+            } else if (received.type === 'file') {
+                if(room_id == received.room_id) {
+                    addMessage(`${received.sender} shared a file:`);
+                    const link = document.createElement('a');
+                    link.href = received.fileUrl;
+                    link.textContent = received.fileName;
+                    link.download = received.fileName;
+                    messagesList.appendChild(link);
+                }
+            }
+
+        };
+
+        // On disconnection
+        ws.onclose = () => {
+            addMessage('Disconnected from the server.');
+        };
+
+        // On error
+        ws.onerror = (error) => {
+            console.error('WebSocket error:', error);
+            addMessage('An error occurred.');
+        };
+
+        // Send a message
+        sendButton.addEventListener('click', () => {
+
+            // let login_user = login_user;
+            // let receiver_user = receiver_user;
+            let messageType = 1;
+            const message = messageInput.value.trim();
+            if (message) {
+                ws.send(JSON.stringify({ sender_name:logged_username, room_id:room_id, type: 'chat', sender: login_user, receiver_user: receiver_user, content: message, messageType:messageType }));
+
+                // addMessage(`You: ${message}`);
+                messageInput.value = '';
+            }
+        });
+
+        // Press "Enter" to send message
+        messageInput.addEventListener('keydown', (event) => {
+            if (event.key === 'Enter') {
+                sendButton.click();
+            }
+        });
+    </script>
+    </body>
+</html>
